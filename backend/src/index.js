@@ -7,6 +7,11 @@ const fs = require('fs');
 const mongoose = require('mongoose');
 const { handleAudioWS } = require('./controllers/audioWsController');
 
+// Import routes
+const contactsRoutes = require('./routes/contacts');
+const alertsRoutes = require('./routes/alerts');
+const evidenceRoutes = require('./routes/evidence');
+
 const app = express();
 const PORT = process.env.PORT || 8000;
 const MONGODB_URI = process.env.MONGODB_URI || '';
@@ -35,6 +40,11 @@ const wss = new WebSocket.Server({ server, path: '/audio' });
 // Handle WebSocket connections for audio
 wss.on('connection', handleAudioWS);
 
+// API Routes
+app.use('/api/contacts', contactsRoutes);
+app.use('/api/alerts', alertsRoutes);
+app.use('/api/evidence', evidenceRoutes);
+
 // Test endpoint for audio classification
 app.get('/api/test/audio', (req, res) => {
     res.json({
@@ -43,7 +53,10 @@ app.get('/api/test/audio', (req, res) => {
             'Real-time audio analysis',
             'Danger sound detection',
             'WebSocket streaming',
-            'Audio buffering and classification'
+            'Audio buffering and classification',
+            'SMS alerts via Twilio',
+            'Emergency contacts management',
+            'Evidence sharing and audio downloads'
         ],
         status: 'active'
     });
@@ -54,7 +67,8 @@ app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+        mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        twilio: config.twilio.accountSid ? 'configured' : 'not configured'
     });
 });
 
@@ -78,6 +92,9 @@ async function start() {
             console.log(`Server listening on port ${PORT}`);
             console.log(`WebSocket endpoint: ws://localhost:${PORT}/audio`);
             console.log(`Test endpoint: http://localhost:${PORT}/api/test/audio`);
+            console.log(`Contacts API: http://localhost:${PORT}/api/contacts`);
+            console.log(`Alerts API: http://localhost:${PORT}/api/alerts`);
+            console.log(`Evidence API: http://localhost:${PORT}/api/evidence`);
         });
     } catch (err) {
         console.error('Failed to start server:', err);
