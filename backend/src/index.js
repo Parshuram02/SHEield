@@ -1,12 +1,24 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
+const mongoose = require('mongoose');
 const { handleAudioWS } = require('./controllers/audioWsController');
+
+// Import routes
+const contactsRoutes = require('./routes/contacts');
+const alertsRoutes = require('./routes/alerts');
+const evidenceRoutes = require('./routes/evidence');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
+const MONGODB_URI = process.env.MONGODB_URI || '';
+
+// Middleware
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '../uploads')));
 
 // Ensure uploads folder exists
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -20,6 +32,7 @@ try {
 } catch (err) {
     console.error('Error creating uploads folder:', err);
 }
+
 // Create HTTP server and WebSocket server
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server, path: '/audio' });
@@ -27,11 +40,66 @@ const wss = new WebSocket.Server({ server, path: '/audio' });
 // Handle WebSocket connections for audio
 wss.on('connection', handleAudioWS);
 
+// API Routes
+app.use('/api/contacts', contactsRoutes);
+app.use('/api/alerts', alertsRoutes);
+app.use('/api/evidence', evidenceRoutes);
+
+// Test endpoint for audio classification
+app.get('/api/test/audio', (req, res) => {
+    res.json({
+        message: 'Audio classification system is running',
+        features: [
+            'Real-time audio analysis',
+            'Danger sound detection',
+            'WebSocket streaming',
+            'Audio buffering and classification',
+            'SMS alerts via Twilio',
+            'Emergency contacts management',
+            'Evidence sharing and audio downloads'
+        ],
+        status: 'active'
+    });
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        twilio: config.twilio.accountSid ? 'configured' : 'not configured'
+    });
+});
+
 // Example REST endpoint
 app.get('/', (req, res) => {
     res.send('Audio WebSocket server running');
 });
 
-server.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
-});
+async function start() {
+    try {
+        if (!MONGODB_URI) {
+            console.warn('MONGODB_URI not set. Mongo connection will be skipped.');
+        } else {
+            await mongoose.connect(MONGODB_URI, {
+                serverSelectionTimeoutMS: 5000,
+            });
+            console.log('Connected to MongoDB');
+        }
+
+        server.listen(PORT, () => {
+            console.log(`Server listening on port ${PORT}`);
+            console.log(`WebSocket endpoint: ws://localhost:${PORT}/audio`);
+            console.log(`Test endpoint: http://localhost:${PORT}/api/test/audio`);
+            console.log(`Contacts API: http://localhost:${PORT}/api/contacts`);
+            console.log(`Alerts API: http://localhost:${PORT}/api/alerts`);
+            console.log(`Evidence API: http://localhost:${PORT}/api/evidence`);
+        });
+    } catch (err) {
+        console.error('Failed to start server:', err);
+        process.exit(1);
+    }
+}
+
+start();
