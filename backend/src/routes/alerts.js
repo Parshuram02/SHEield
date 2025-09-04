@@ -3,6 +3,7 @@ const router = express.Router();
 const alertsController = require('../controllers/alertsController');
 const apiKeyAuth = require('../middleware/apiKeyAuth');
 
+
 // Apply API key authentication to all routes
 router.use(apiKeyAuth);
 
