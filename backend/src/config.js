@@ -9,20 +9,27 @@ function getEnv(name, defaultValue) {
 }
 
 const config = {
-    port: Number(getEnv('PORT', 8000)),
-    apiKey: getEnv('API_KEY', ''),
-    mongodbUri: getEnv('MONGODB_URI', ''),
+    server: {
+        port: Number(getEnv('PORT', 8000)),
+        apiKey: getEnv('API_KEY', 'change-me')
+    },
+    mongodb: {
+        uri: getEnv('MONGODB_URI', 'mongodb://localhost:27017/sheield')
+    },
     twilio: {
         accountSid: getEnv('TWILIO_ACCOUNT_SID', ''),
         authToken: getEnv('TWILIO_AUTH_TOKEN', ''),
         fromNumber: getEnv('TWILIO_FROM_NUMBER', ''),
+        whatsappFrom: getEnv('TWILIO_WHATSAPP_FROM', '')
     },
-    googleMapsApiKey: getEnv('GOOGLE_MAPS_API_KEY', ''),
+    googleMaps: {
+        apiKey: getEnv('GOOGLE_MAPS_API_KEY', '')
+    },
     speech: {
-        google: getEnv('GOOGLE_STT_KEY', ''),
+        google: getEnv('GOOGLE_APPLICATION_CREDENTIALS', ''),
         deepgram: getEnv('DEEPGRAM_API_KEY', ''),
-        assemblyAi: getEnv('ASSEMBLYAI_API_KEY', ''),
-    },
+        assemblyAi: getEnv('ASSEMBLYAI_API_KEY', '')
+    }
 };
 
 module.exports = config;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, MapPin, Phone, Activity, AlertTriangle, Users } from 'lucide-react';
+import { Shield, MapPin, Phone, Activity, AlertTriangle, Users, Volume2, Navigation, Zap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,25 +7,60 @@ import AudioMonitor from '@/components/AudioMonitor';
 import EmergencyContacts from '@/components/EmergencyContacts';
 import AlertHistory from '@/components/AlertHistory';
 import SafetyStatus from '@/components/SafetyStatus';
+import KeywordDetector from '@/components/KeywordDetector';
+import SafePlaces from '@/components/SafePlaces';
+import EmergencyPrompt from '@/components/EmergencyPrompt';
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [activeTab, setActiveTab] = useState('monitor');
+  const [emergencyActive, setEmergencyActive] = useState(false);
+  const [sirenEnabled, setSirenEnabled] = useState(false);
+  const [flashEnabled, setFlashEnabled] = useState(false);
 
   const tabs = [
     { id: 'monitor', label: 'Monitor', icon: Activity },
+    { id: 'keywords', label: 'Keywords', icon: Volume2 },
     { id: 'contacts', label: 'Contacts', icon: Users },
     { id: 'history', label: 'History', icon: AlertTriangle },
+    { id: 'places', label: 'Safe Places', icon: Navigation },
+    { id: 'alerts', label: 'Alerts', icon: Zap },
   ];
 
   const renderContent = () => {
     switch (activeTab) {
       case 'monitor':
         return <AudioMonitor isMonitoring={isMonitoring} setIsMonitoring={setIsMonitoring} />;
+      case 'keywords':
+        return <KeywordDetector 
+          onKeywordDetected={(keyword, confidence, transcription) => {
+            console.log(`🚨 Emergency keyword detected: ${keyword} (${(confidence * 100).toFixed(1)}%)`);
+            // TODO: Integrate with emergency system
+          }}
+          isEnabled={true}
+        />;
       case 'contacts':
         return <EmergencyContacts />;
       case 'history':
         return <AlertHistory />;
+      case 'places':
+        return <SafePlaces 
+          onLocationSelect={(place) => {
+            console.log(`📍 Selected safe place: ${place.name}`);
+            // TODO: Integrate with emergency system
+          }}
+          emergencyMode={isMonitoring}
+        />;
+      case 'alerts':
+        return <EmergencyPrompt 
+          isActive={emergencyActive}
+          onSirenToggle={setSirenEnabled}
+          onFlashToggle={setFlashEnabled}
+          onVolumeChange={(volume) => console.log('Volume changed:', volume)}
+          onFlashRateChange={(rate) => console.log('Flash rate changed:', rate)}
+          onEmergencyActivate={() => setEmergencyActive(true)}
+          onEmergencyDeactivate={() => setEmergencyActive(false)}
+        />;
       default:
         return <AudioMonitor isMonitoring={isMonitoring} setIsMonitoring={setIsMonitoring} />;
     }

@@ -11,6 +11,8 @@ const { handleAudioWS } = require('./controllers/audioWsController');
 const contactsRoutes = require('./routes/contacts');
 const alertsRoutes = require('./routes/alerts');
 const evidenceRoutes = require('./routes/evidence');
+const keywordsRoutes = require('./routes/keywords');
+const placesRoutes = require('./routes/places');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -44,6 +46,8 @@ wss.on('connection', handleAudioWS);
 app.use('/api/contacts', contactsRoutes);
 app.use('/api/alerts', alertsRoutes);
 app.use('/api/evidence', evidenceRoutes);
+app.use('/api/keywords', keywordsRoutes);
+app.use('/api/places', placesRoutes);
 
 // Test endpoint for audio classification
 app.get('/api/test/audio', (req, res) => {

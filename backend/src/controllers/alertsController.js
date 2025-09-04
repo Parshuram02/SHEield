@@ -65,7 +65,7 @@ exports.sendAlert = async (req, res) => {
                 // Create SMS message
                 const message = createSMSMessage(alertEvent, contact, baseUrl);
                 
-                // Send via Twilio
+                // Send via Twilio (SMS)
                 const twilioMessage = await twilioClient.messages.create({
                     body: message,
                     from: config.twilio.fromNumber,
@@ -73,11 +73,29 @@ exports.sendAlert = async (req, res) => {
                     statusCallback: `${baseUrl}/api/alerts/twilio/status`
                 });
 
+                // Optionally send WhatsApp if configured
+                let whatsappSid = null;
+                if (config.twilio.whatsappFrom) {
+                    try {
+                        const wa = await twilioClient.messages.create({
+                            body: message,
+                            from: config.twilio.whatsappFrom,
+                            to: `whatsapp:${contact.phoneE164.replace(/^\+?/, '')}`.startsWith('whatsapp:')
+                                ? `whatsapp:${contact.phoneE164}`
+                                : `whatsapp:${contact.phoneE164}`
+                        });
+                        whatsappSid = wa.sid;
+                        console.log(`WhatsApp sent to ${contact.name}: ${wa.sid}`);
+                    } catch (waErr) {
+                        console.warn(`WhatsApp send failed for ${contact.name}:`, waErr.message);
+                    }
+                }
+
                 // Update alert event with recipient info
                 const recipientInfo = {
                     contactId: contact._id,
                     status: 'sent',
-                    provider: 'twilio',
+                    provider: 'twilio', // primary provider record
                     providerMessageId: twilioMessage.sid,
                     deliveredAt: null,
                     failedAt: null
@@ -90,7 +108,8 @@ exports.sendAlert = async (req, res) => {
                     contactName: contact.name,
                     phone: contact.phoneE164,
                     status: 'sent',
-                    twilioSid: twilioMessage.sid
+                    twilioSid: twilioMessage.sid,
+                    whatsappSid
                 });
 
                 console.log(`SMS sent to ${contact.name} (${contact.phoneE164}): ${twilioMessage.sid}`);
@@ -328,3 +347,5 @@ exports.retryFailedSMS = async (req, res) => {
         res.status(500).json({ error: 'Failed to retry SMS' });
     }
 };
+
+

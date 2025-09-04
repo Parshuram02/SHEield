@@ -10,8 +10,8 @@ class AudioAnalyzer {
         this.buffer = [];
         this.frameCount = 0;
         this.lastClassification = null;
-        this.dangerThreshold = 0.7;
-        this.hysteresisFrames = 3; // Require N consecutive positive frames
+        this.dangerThreshold = 0.3;
+        this.hysteresisFrames = 1; // Require N consecutive positive frames
         this.positiveFrameCount = 0;
     }
 

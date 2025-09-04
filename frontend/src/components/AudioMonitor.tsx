@@ -101,7 +101,7 @@ const AudioMonitor: React.FC<AudioMonitorProps> = ({ isMonitoring, setIsMonitori
     const zeroCrossingRate = calculateZeroCrossingRate(buffer);
     const spectralCentroid = calculateSpectralCentroid(buffer);
     const isVoice = energy > VAD_THRESHOLD && zeroCrossingRate > 0.05 && zeroCrossingRate < 0.4;
-    const highPitch = spectralCentroid > 0.6
+    
     const newAnalysis: AudioAnalysis = {
       level: Math.min(100, energy * 100),
       energy,
@@ -159,7 +159,7 @@ const AudioMonitor: React.FC<AudioMonitorProps> = ({ isMonitoring, setIsMonitori
         processAudioBuffer(inputData);
         
         // Buffer audio for potential upload
-        audioBufferRef.current.push(new Float32Array(inputData));
+        audioBufferRef.current.push([...inputData]);
         frameCountRef.current++;
         
         // Keep only last 5 seconds of audio (at 44.1kHz)
