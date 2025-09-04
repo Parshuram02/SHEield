@@ -4,8 +4,7 @@ const { Schema } = mongoose;
 const ContactSchema = new Schema(
     {
         userId: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
+            type: Schema.Types.Mixed, // Allow both ObjectId and String for flexibility
             required: true,
             index: true,
         },

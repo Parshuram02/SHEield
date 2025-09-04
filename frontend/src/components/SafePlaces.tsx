@@ -641,3 +641,4 @@ const SafePlaces: React.FC<SafePlacesProps> = ({ onLocationSelect, emergencyMode
 export default SafePlaces;
 
 
+

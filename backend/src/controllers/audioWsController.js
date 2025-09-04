@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-const { AlertEvent } = require('../models');
+const { AlertEvent, Contact } = require('../models');
+const DangerClassifier = require('../services/dangerClassifier');
+const twilio = require('twilio');
+const config = require('../config');
 
 // Audio analysis and classification
 class AudioAnalyzer {
@@ -13,6 +16,8 @@ class AudioAnalyzer {
         this.dangerThreshold = 0.3;
         this.hysteresisFrames = 1; // Require N consecutive positive frames
         this.positiveFrameCount = 0;
+        this.yamnetClassifier = new DangerClassifier();
+        this.useYamnet = true; // Set to false to fall back to heuristic
     }
 
     // Calculate audio energy from buffer
@@ -49,8 +54,31 @@ class AudioAnalyzer {
         return magnitudeSum > 0 ? weightedSum / magnitudeSum : 0;
     }
 
-    // Detect dangerous sounds based on audio characteristics
-    classifyAudio(buffer) {
+    // Detect dangerous sounds using YAMNet or fallback to heuristic
+    async classifyAudio(buffer) {
+        if (this.useYamnet && this.yamnetClassifier.model) {
+            try {
+                // Convert buffer to Float32Array for YAMNet
+                const audioData = new Float32Array(buffer);
+                const result = await this.yamnetClassifier.classifyAudio(audioData, this.sampleRate);
+                
+                return {
+                    classification: result.dangerType,
+                    dangerScore: result.confidence,
+                    isDangerous: result.isDangerous,
+                    primaryClass: result.primaryClass,
+                    allDangerClasses: result.allDangerClasses,
+                    topPredictions: result.topPredictions,
+                    model: 'YAMNet',
+                    timestamp: Date.now()
+                };
+            } catch (error) {
+                console.warn('YAMNet classification failed, falling back to heuristic:', error.message);
+                this.useYamnet = false; // Disable YAMNet for this session
+            }
+        }
+
+        // Fallback to heuristic classification
         const energy = this.calculateEnergy(buffer);
         const zeroCrossingRate = this.calculateZeroCrossingRate(buffer);
         const spectralCentroid = this.calculateSpectralCentroid(buffer);
@@ -96,16 +124,31 @@ class AudioAnalyzer {
             energy,
             zeroCrossingRate,
             spectralCentroid,
+            model: 'heuristic',
             timestamp: Date.now()
         };
     }
 
     // Process audio buffer with hysteresis
-    processBuffer(audioData) {
-        // Convert audio data to float array if needed
+    async processBuffer(audioData) {
+        // For WebM audio data, we'll use a simplified approach
+        // Since WebM is compressed, we'll analyze the raw data characteristics
         let buffer;
+        
         if (audioData instanceof Buffer) {
-            buffer = new Float32Array(audioData.buffer);
+            // For WebM data, create a synthetic audio buffer based on data characteristics
+            // This is a simplified approach - in production, you'd decode the WebM first
+            const dataSize = audioData.length;
+            const syntheticLength = Math.min(4096, Math.floor(dataSize / 4)); // Create synthetic buffer
+            buffer = new Float32Array(syntheticLength);
+            
+            // Fill with synthetic audio data based on WebM characteristics
+            for (let i = 0; i < syntheticLength; i++) {
+                const byteIndex = Math.floor((i / syntheticLength) * dataSize);
+                const byteValue = audioData[byteIndex] || 0;
+                // Convert byte to float (-1 to 1 range)
+                buffer[i] = (byteValue - 128) / 128;
+            }
         } else if (audioData instanceof Float32Array) {
             buffer = audioData;
         } else {
@@ -122,8 +165,34 @@ class AudioAnalyzer {
             this.buffer.shift();
         }
 
-        // Analyze current frame
-        const analysis = this.classifyAudio(buffer);
+        // Analyze current frame - use both synthetic buffer and raw data analysis
+        const analysis = await this.classifyAudio(buffer);
+        
+        // Also analyze raw WebM data characteristics for additional insights
+        if (audioData instanceof Buffer) {
+            const rawAnalysis = this.analyzeWebMData(audioData);
+            // Combine both analyses
+            analysis.rawDataAnalysis = rawAnalysis;
+            
+            // Adjust danger score based on raw data characteristics
+            let rawDangerBoost = 0;
+            if (rawAnalysis.hasHighVariability) rawDangerBoost += 0.2;
+            if (rawAnalysis.hasSuddenChanges) rawDangerBoost += 0.2;
+            if (rawAnalysis.isLoud) rawDangerBoost += 0.3;
+            if (rawAnalysis.complexity > 5) rawDangerBoost += 0.1;
+            
+            analysis.dangerScore = Math.min(1, analysis.dangerScore + rawDangerBoost);
+            
+            // Log raw analysis for debugging
+            console.log('WebM Raw Analysis:', {
+                dataSize: rawAnalysis.dataSize,
+                hasHighVariability: rawAnalysis.hasHighVariability,
+                hasSuddenChanges: rawAnalysis.hasSuddenChanges,
+                isLoud: rawAnalysis.isLoud,
+                complexity: rawAnalysis.complexity,
+                dangerBoost: rawDangerBoost
+            });
+        }
         
         // Apply hysteresis to reduce false positives
         if (analysis.dangerScore > this.dangerThreshold) {
@@ -154,6 +223,112 @@ class AudioAnalyzer {
         this.buffer = [];
         this.frameCount = 0;
         this.positiveFrameCount = 0;
+    }
+
+    // Analyze WebM data characteristics without decoding
+    analyzeWebMData(webmBuffer) {
+        const data = webmBuffer;
+        const dataSize = data.length;
+        
+        // Calculate basic statistics
+        let sum = 0;
+        let variance = 0;
+        let maxValue = 0;
+        let minValue = 255;
+        let changes = 0;
+        
+        for (let i = 0; i < dataSize; i++) {
+            const value = data[i];
+            sum += value;
+            maxValue = Math.max(maxValue, value);
+            minValue = Math.min(minValue, value);
+            
+            if (i > 0) {
+                const change = Math.abs(value - data[i - 1]);
+                if (change > 50) changes++; // Significant change threshold
+            }
+        }
+        
+        const mean = sum / dataSize;
+        
+        // Calculate variance
+        for (let i = 0; i < dataSize; i++) {
+            variance += Math.pow(data[i] - mean, 2);
+        }
+        variance /= dataSize;
+        
+        const standardDeviation = Math.sqrt(variance);
+        const dynamicRange = maxValue - minValue;
+        const changeRate = changes / dataSize;
+        
+        return {
+            dataSize,
+            mean,
+            standardDeviation,
+            dynamicRange,
+            changeRate,
+            hasHighVariability: standardDeviation > 30,
+            hasSuddenChanges: changeRate > 0.1,
+            isLoud: mean > 150 || dynamicRange > 100,
+            complexity: standardDeviation * changeRate
+        };
+    }
+}
+
+// Initialize Twilio client
+const twilioClient = twilio(config.twilio.accountSid, config.twilio.authToken);
+
+// Function to send emergency alerts to contacts
+async function sendEmergencyAlert(alertEvent, audioFile) {
+    try {
+        // Get emergency contacts (for now, using a default user ID)
+        const contacts = await Contact.find({ 
+            userId: 'default', // Will be replaced with actual user ID when auth is implemented
+            verifiedAt: { $exists: true }
+        });
+
+        if (contacts.length === 0) {
+            console.log('No emergency contacts found');
+            return;
+        }
+
+        const baseUrl = 'http://localhost:8000'; // Will be configurable
+        const evidenceUrl = `${baseUrl}/api/evidence/${alertEvent._id}`;
+
+        // Create alert message
+        const message = `🚨 EMERGENCY ALERT 🚨\n` +
+            `Dangerous sound detected!\n` +
+            `Type: ${alertEvent.type.toUpperCase()}\n` +
+            `Confidence: ${(alertEvent.confidence * 100).toFixed(1)}%\n` +
+            `Time: ${new Date(alertEvent.occurredAt).toLocaleTimeString()}\n` +
+            `Evidence: ${evidenceUrl}`;
+
+        // Send to each contact
+        for (const contact of contacts) {
+            try {
+                // Send SMS
+                const smsResult = await twilioClient.messages.create({
+                    body: message,
+                    from: config.twilio.fromNumber,
+                    to: contact.phoneE164
+                });
+                console.log(`SMS sent to ${contact.name}: ${smsResult.sid}`);
+
+                // Send WhatsApp if configured
+                if (config.twilio.whatsappFrom) {
+                    const waResult = await twilioClient.messages.create({
+                        body: message,
+                        from: config.twilio.whatsappFrom,
+                        to: `whatsapp:${contact.phoneE164}`
+                    });
+                    console.log(`WhatsApp sent to ${contact.name}: ${waResult.sid}`);
+                }
+            } catch (error) {
+                console.error(`Failed to send alert to ${contact.name}:`, error);
+            }
+        }
+    } catch (error) {
+        console.error('Error sending emergency alerts:', error);
     }
 }
 
@@ -220,10 +395,28 @@ function handleAudioWS(ws) {
 
             // Handle binary audio data
             if (data instanceof Buffer || data instanceof ArrayBuffer) {
-                console.log('Received audio chunk:', data.length || data.byteLength);
+                console.log('Received audio chunk:', data.length || data.byteLength, 'bytes');
+                
+                // Log audio chunk details for debugging
+                if (data.length > 0) {
+                    console.log('Audio chunk details:', {
+                        size: data.length,
+                        timestamp: new Date().toISOString(),
+                        chunkIndex: chunkIndex
+                    });
+                }
                 
                 // Analyze audio in real-time
-                const analysis = analyzer.processBuffer(data);
+                const analysis = await analyzer.processBuffer(data);
+                
+                // Log analysis results for debugging
+                console.log('Audio analysis:', {
+                    isDangerous: analysis.isDangerous,
+                    classification: analysis.classification,
+                    dangerScore: analysis.dangerScore,
+                    confidence: analysis.confidence,
+                    chunkIndex: chunkIndex
+                });
                 
                 // Send real-time analysis back to frontend
                 ws.send(JSON.stringify({
@@ -250,14 +443,21 @@ function handleAudioWS(ws) {
                             
                             // Create alert event for dangerous sound
                             const alertEvent = new AlertEvent({
-                                userId: 'unknown', // Will be set when user auth is implemented
+                                userId: 'default', // Using string userId for testing
                                 type: analysis.classification,
                                 trigger: {
                                     source: 'model',
                                     model: 'audio_analyzer'
                                 },
                                 confidence: analysis.dangerScore,
-                                audioFiles: [filename],
+                                audioFiles: [{
+                                    filename: filename,
+                                    originalName: filename,
+                                    mimeType: 'audio/webm',
+                                    size: data.length,
+                                    duration: 1.0,
+                                    uploadPath: `/uploads/${filename}`
+                                }],
                                 notes: `Dangerous sound detected: ${analysis.classification}`,
                                 meta: {
                                     analysis: analysis,
@@ -278,8 +478,23 @@ function handleAudioWS(ws) {
                                     audioFile: filename,
                                     timestamp: Date.now()
                                 }));
+                                
+                                // Automatically send emergency alerts to contacts
+                                await sendEmergencyAlert(alertEvent, filename);
+                                
                             } catch (err) {
-                                console.error('Failed to save danger alert:', err);
+                                console.error('Failed to save danger alert:', err.message);
+                                
+                                // Send alert to frontend even if database save fails
+                                ws.send(JSON.stringify({
+                                    type: 'danger_detected',
+                                    alertId: 'temp_' + Date.now(),
+                                    classification: analysis.classification,
+                                    confidence: analysis.dangerScore,
+                                    audioFile: filename,
+                                    timestamp: Date.now(),
+                                    warning: 'Database unavailable - alert not saved'
+                                }));
                             }
                         }
                     });

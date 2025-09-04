@@ -43,9 +43,9 @@ const AudioMonitor: React.FC<AudioMonitorProps> = ({ isMonitoring, setIsMonitori
   const audioBufferRef = useRef<Float32Array[]>([]);
   const frameCountRef = useRef(0);
 
-  // VAD parameters
-  const VAD_THRESHOLD = 0.1;
-  const DANGER_THRESHOLD = 0.7;
+  // VAD parameters - Lowered thresholds for better sensitivity
+  const VAD_THRESHOLD = 0.05; // Lowered from 0.1
+  const DANGER_THRESHOLD = 0.3; // Lowered from 0.7
   const BUFFER_SIZE = 4096;
   const SAMPLE_RATE = 44100;
 
@@ -83,13 +83,19 @@ const AudioMonitor: React.FC<AudioMonitorProps> = ({ isMonitoring, setIsMonitori
   };
 
   const detectDangerousSound = (analysis: AudioAnalysis): boolean => {
-    // Heuristic-based danger detection
-    const highEnergy = analysis.energy > 0.3;
-    const highPitch = analysis.spectralCentroid > 0.6;
-    const voiceLike = analysis.zeroCrossingRate > 0.1 && analysis.zeroCrossingRate < 0.3;
+    // Enhanced heuristic-based danger detection with lower thresholds
+    const highEnergy = analysis.energy > 0.15; // Lowered from 0.3
+    const highPitch = analysis.spectralCentroid > 0.4; // Lowered from 0.6
+    const voiceLike = analysis.zeroCrossingRate > 0.05 && analysis.zeroCrossingRate < 0.35; // Wider range
+    const veryLoud = analysis.energy > 0.4; // New threshold for very loud sounds
     
     // Detect potential screams, crashes, or loud impacts
     if (highEnergy && (highPitch || voiceLike)) {
+      return true;
+    }
+    
+    // Detect very loud sounds regardless of other factors
+    if (veryLoud) {
       return true;
     }
     
@@ -100,7 +106,7 @@ const AudioMonitor: React.FC<AudioMonitorProps> = ({ isMonitoring, setIsMonitori
     const energy = calculateEnergy(buffer);
     const zeroCrossingRate = calculateZeroCrossingRate(buffer);
     const spectralCentroid = calculateSpectralCentroid(buffer);
-    const isVoice = energy > VAD_THRESHOLD && zeroCrossingRate > 0.05 && zeroCrossingRate < 0.4;
+    const isVoice = energy > VAD_THRESHOLD && zeroCrossingRate > 0.03 && zeroCrossingRate < 0.45; // Wider range
     
     const newAnalysis: AudioAnalysis = {
       level: Math.min(100, energy * 100),
@@ -111,12 +117,13 @@ const AudioMonitor: React.FC<AudioMonitorProps> = ({ isMonitoring, setIsMonitori
       dangerScore: 0
     };
 
-    // Calculate danger score based on multiple factors
+    // Calculate danger score based on multiple factors - More sensitive
     let dangerScore = 0;
-    if (energy > 0.2) dangerScore += 0.3;
-    if (highPitch) dangerScore += 0.2;
-    if (isVoice && energy > 0.4) dangerScore += 0.3;
-    if (energy > 0.6) dangerScore += 0.2;
+    if (energy > 0.1) dangerScore += 0.3; // Lowered from 0.2
+    if (spectralCentroid > 0.4) dangerScore += 0.2; // Lowered from 0.6
+    if (isVoice && energy > 0.2) dangerScore += 0.3; // Lowered from 0.4
+    if (energy > 0.4) dangerScore += 0.2; // Lowered from 0.6
+    if (energy > 0.6) dangerScore += 0.1; // Additional high energy bonus
     
     newAnalysis.dangerScore = Math.min(1, dangerScore);
     
@@ -210,6 +217,33 @@ const AudioMonitor: React.FC<AudioMonitorProps> = ({ isMonitoring, setIsMonitori
     async function startRecording() {
       try {
         wsRef.current = new WebSocket('ws://localhost:8000/audio');
+        
+        // Add WebSocket event handlers
+        wsRef.current.onopen = () => {
+          console.log('WebSocket connected to backend');
+        };
+        
+        wsRef.current.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('Received from backend:', data);
+            
+            // Handle danger detection confirmation
+            if (data.type === 'danger_detected') {
+              console.log('Backend confirmed danger:', data);
+            }
+          } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
+          }
+        };
+        
+        wsRef.current.onerror = (error) => {
+          console.error('WebSocket error:', error);
+        };
+        
+        wsRef.current.onclose = () => {
+          console.log('WebSocket disconnected');
+        };
 
         stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
@@ -230,10 +264,15 @@ const AudioMonitor: React.FC<AudioMonitorProps> = ({ isMonitoring, setIsMonitori
 
         mediaRecorder.ondataavailable = (event) => {
           if (event.data.size > 0 && wsRef.current?.readyState === WebSocket.OPEN) {
-            // Only send audio if VAD detects activity or danger
-            if (audioAnalysis.isVoice || audioAnalysis.dangerScore > 0.5) {
-              wsRef.current.send(event.data);
-            }
+            // Always send audio data to backend for processing
+            wsRef.current.send(event.data);
+            
+            // Log audio data for debugging
+            console.log('Audio chunk sent:', {
+              size: event.data.size,
+              timestamp: Date.now(),
+              analysis: audioAnalysis
+            });
           }
         };
 
