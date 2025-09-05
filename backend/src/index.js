@@ -6,6 +6,8 @@ const path = require('path');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const { handleAudioWS } = require('./controllers/audioWsController');
+const config = require('./config'); // Assuming you have a config module exporting env vars
+
 
 // Import routes
 const contactsRoutes = require('./routes/contacts');
@@ -15,10 +17,9 @@ const keywordsRoutes = require('./routes/keywords');
 const placesRoutes = require('./routes/places');
 
 const app = express();
-const PORT = process.env.PORT || 8000;
-const MONGODB_URI = process.env.MONGODB_URI || '';
+const PORT = config.server.port || 8000;
+const MONGODB_URI = config.mongodb.uri || '';
 
-// Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../uploads')));
 
@@ -38,8 +39,6 @@ try {
 // Create HTTP server and WebSocket server
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server, path: '/audio' });
-
-// Handle WebSocket connections for audio
 wss.on('connection', handleAudioWS);
 
 // API Routes
@@ -81,27 +80,43 @@ app.get('/', (req, res) => {
     res.send('Audio WebSocket server running');
 });
 
+// MongoDB connection event logs
+mongoose.connection.on('connected', () => {
+    console.log('🟢 MongoDB connected');
+});
+
+mongoose.connection.on('error', err => {
+    console.error('🔴 MongoDB connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.warn('⚠️ MongoDB disconnected');
+});
+
 async function start() {
     try {
         if (!MONGODB_URI) {
-            console.warn('MONGODB_URI not set. Mongo connection will be skipped.');
+            console.warn('⚠️ MONGODB_URI not set. Mongo connection will be skipped.');
         } else {
+            console.log('Attempting MongoDB connection...');
             await mongoose.connect(MONGODB_URI, {
+                useNewUrlParser: true,
+                useUnifiedTopology: true,
                 serverSelectionTimeoutMS: 5000,
             });
-            console.log('Connected to MongoDB');
+            console.log('✅ Connected to MongoDB');
         }
 
         server.listen(PORT, () => {
-            console.log(`Server listening on port ${PORT}`);
-            console.log(`WebSocket endpoint: ws://localhost:${PORT}/audio`);
-            console.log(`Test endpoint: http://localhost:${PORT}/api/test/audio`);
-            console.log(`Contacts API: http://localhost:${PORT}/api/contacts`);
-            console.log(`Alerts API: http://localhost:${PORT}/api/alerts`);
-            console.log(`Evidence API: http://localhost:${PORT}/api/evidence`);
+            console.log(`🚀 Server listening on port ${PORT}`);
+            console.log(`🔊 WebSocket endpoint: ws://localhost:${PORT}/audio`);
+            console.log(`📡 Test endpoint: http://localhost:${PORT}/api/test/audio`);
+            console.log(`📞 Contacts API: http://localhost:${PORT}/api/contacts`);
+            console.log(`🚨 Alerts API: http://localhost:${PORT}/api/alerts`);
+            console.log(`📁 Evidence API: http://localhost:${PORT}/api/evidence`);
         });
     } catch (err) {
-        console.error('Failed to start server:', err);
+        console.error('❌ Failed to start server:', err);
         process.exit(1);
     }
 }
