@@ -2,7 +2,7 @@ require('dotenv').config();
 const axios = require('axios');
 
 const API_BASE_URL = 'http://localhost:8000';
-const API_KEY = process.env.API_KEY || 'your-secret-key';
+const API_KEY = process.env.API_KEY || 'change-me';
 
 async function testPlacesAPI() {
     console.log('🧪 Testing Places API...\n');

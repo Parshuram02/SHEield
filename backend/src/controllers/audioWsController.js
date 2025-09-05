@@ -275,8 +275,18 @@ class AudioAnalyzer {
     }
 }
 
-// Initialize Twilio client
-const twilioClient = twilio(config.twilio.accountSid, config.twilio.authToken);
+// Initialize Twilio client (only if credentials are provided)
+let twilioClient = null;
+if (config.twilio.accountSid && config.twilio.authToken && config.twilio.accountSid.startsWith('AC')) {
+    try {
+        twilioClient = twilio(config.twilio.accountSid, config.twilio.authToken);
+        console.log('✅ Twilio client initialized');
+    } catch (error) {
+        console.warn('⚠️ Failed to initialize Twilio client:', error.message);
+    }
+} else {
+    console.log('⚠️ Twilio credentials not configured - SMS alerts disabled');
+}
 
 // Function to send emergency alerts to contacts
 async function sendEmergencyAlert(alertEvent, audioFile) {
@@ -306,22 +316,27 @@ async function sendEmergencyAlert(alertEvent, audioFile) {
         // Send to each contact
         for (const contact of contacts) {
             try {
-                // Send SMS
-                const smsResult = await twilioClient.messages.create({
-                    body: message,
-                    from: config.twilio.fromNumber,
-                    to: contact.phoneE164
-                });
-                console.log(`SMS sent to ${contact.name}: ${smsResult.sid}`);
-
-                // Send WhatsApp if configured
-                if (config.twilio.whatsappFrom) {
-                    const waResult = await twilioClient.messages.create({
+                if (twilioClient) {
+                    // Send SMS
+                    const smsResult = await twilioClient.messages.create({
                         body: message,
-                        from: config.twilio.whatsappFrom,
-                        to: `whatsapp:${contact.phoneE164}`
+                        from: config.twilio.fromNumber,
+                        to: contact.phoneE164
                     });
-                    console.log(`WhatsApp sent to ${contact.name}: ${waResult.sid}`);
+                    console.log(`SMS sent to ${contact.name}: ${smsResult.sid}`);
+
+                    // Send WhatsApp if configured
+                    if (config.twilio.whatsappFrom) {
+                        const waResult = await twilioClient.messages.create({
+                            body: message,
+                            from: config.twilio.whatsappFrom,
+                            to: `whatsapp:${contact.phoneE164}`
+                        });
+                        console.log(`WhatsApp sent to ${contact.name}: ${waResult.sid}`);
+                    }
+                } else {
+                    console.log(`⚠️ Twilio not configured - would send alert to ${contact.name} (${contact.phoneE164})`);
+                    console.log(`Message: ${message}`);
                 }
             } catch (error) {
                 console.error(`Failed to send alert to ${contact.name}:`, error);
