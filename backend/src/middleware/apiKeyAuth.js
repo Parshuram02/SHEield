@@ -3,7 +3,7 @@ module.exports = function apiKeyAuth(req, res, next) {
     if (!configuredKey) {
         return res.status(500).json({ error: 'Server API key not configured' });
     }
-    const headerKey = req.header('x-api-key');
+    const headerKey = req.header('x-api-key') || req.header('X-API-Key');
     if (headerKey && headerKey === configuredKey) {
         return next();
     }

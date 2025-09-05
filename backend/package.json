@@ -13,15 +13,14 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@google-cloud/speech": "^6.7.1",
+    "@google-cloud/speech": "^6.0.0",
     "assemblyai": "^4.0.0",
-    "axios": "^1.11.0",
+    "axios": "^1.7.9",
     "deepgram": "latest",
     "dotenv": "^16.4.5",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.0",
-    "punycode": "^2.3.1",
     "twilio": "^4.22.0",
     "ws": "^8.18.3"
   },

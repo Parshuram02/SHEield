@@ -26,7 +26,7 @@ const RecipientSchema = new Schema(
 
 const AlertEventSchema = new Schema(
     {
-        userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+        userId: { type: Schema.Types.Mixed, required: true, index: true }, // Allow both ObjectId and String
         type: {
             type: String,
             enum: ['scream', 'crash', 'running', 'keyword', 'manual', 'unknown'],
@@ -37,7 +37,7 @@ const AlertEventSchema = new Schema(
         
         // Enhanced trigger information
         trigger: {
-            source: { type: String, enum: ['model', 'keyword', 'manual'], required: true },
+            source: { type: String, enum: ['model', 'keyword', 'manual', 'test'], required: true },
             model: { type: String },
             keyword: { type: String },
             timestamp: { type: Date, default: Date.now },

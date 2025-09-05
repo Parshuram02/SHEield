@@ -31,17 +31,21 @@ class KeywordDetectionService {
     initializeProviders() {
         try {
             // Google Cloud Speech
-            if (config.speech.google) {
-                this.googleClient = new speech.SpeechClient({
-                    keyFilename: config.speech.google,
-                    // Or use credentials directly:
-                    // credentials: JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS)
-                });
-                console.log('✅ Google Cloud Speech initialized');
+            if (config.speech.google && config.speech.google !== 'your_google_credentials_file') {
+                try {
+                    this.googleClient = new speech.SpeechClient({
+                        keyFilename: config.speech.google,
+                        // Or use credentials directly:
+                        // credentials: JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS)
+                    });
+                    console.log('✅ Google Cloud Speech initialized');
+                } catch (error) {
+                    console.log('⚠️ Google Cloud Speech not available:', error.message);
+                }
             }
 
             // Deepgram
-            if (config.speech.deepgram) {
+            if (config.speech.deepgram && config.speech.deepgram !== 'your_deepgram_key') {
                 try {
                     const { Deepgram } = require('deepgram');
                     this.deepgramClient = new Deepgram(config.speech.deepgram);
@@ -52,9 +56,13 @@ class KeywordDetectionService {
             }
 
             // AssemblyAI
-            if (config.speech.assemblyAi) {
-                this.assemblyAiClient = new AssemblyAI(config.speech.assemblyAi);
-                console.log('✅ AssemblyAI initialized');
+            if (config.speech.assemblyAi && config.speech.assemblyAi !== 'your_assemblyai_key') {
+                try {
+                    this.assemblyAiClient = new AssemblyAI(config.speech.assemblyAi);
+                    console.log('✅ AssemblyAI initialized');
+                } catch (error) {
+                    console.log('⚠️ AssemblyAI not available:', error.message);
+                }
             }
 
             if (!this.googleClient && !this.deepgramClient && !this.assemblyAiClient) {

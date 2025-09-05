@@ -5,6 +5,7 @@ const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
 const mongoose = require('mongoose');
+const config = require('./config');
 const { handleAudioWS } = require('./controllers/audioWsController');
 const config = require('./config'); // Assuming you have a config module exporting env vars
 
@@ -17,8 +18,8 @@ const keywordsRoutes = require('./routes/keywords');
 const placesRoutes = require('./routes/places');
 
 const app = express();
-const PORT = config.server.port || 8000;
-const MONGODB_URI = config.mongodb.uri || '';
+const PORT = process.env.PORT || 8000;
+const MONGODB_URI = process.env.MONGODB_URI || '';
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../uploads')));
@@ -71,7 +72,7 @@ app.get('/health', (req, res) => {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-        twilio: config.twilio.accountSid ? 'configured' : 'not configured'
+        twilio: config.twilio.accountSid ? 'confHEieldigured' : 'not configured'
     });
 });
 
@@ -96,15 +97,14 @@ mongoose.connection.on('disconnected', () => {
 async function start() {
     try {
         if (!MONGODB_URI) {
-            console.warn('⚠️ MONGODB_URI not set. Mongo connection will be skipped.');
+            console.warn('MONGODB_URI not set. Mongo connection will be skipped.');
         } else {
-            console.log('Attempting MongoDB connection...');
             await mongoose.connect(MONGODB_URI, {
                 useNewUrlParser: true,
                 useUnifiedTopology: true,
                 serverSelectionTimeoutMS: 5000,
             });
-            console.log('✅ Connected to MongoDB');
+            console.log('Connected to MongoDB');
         }
 
         server.listen(PORT, () => {
@@ -116,7 +116,7 @@ async function start() {
             console.log(`📁 Evidence API: http://localhost:${PORT}/api/evidence`);
         });
     } catch (err) {
-        console.error('❌ Failed to start server:', err);
+        console.error('Failed to start server:', err);
         process.exit(1);
     }
 }

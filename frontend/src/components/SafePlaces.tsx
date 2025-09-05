@@ -277,7 +277,7 @@ const SafePlaces: React.FC<SafePlacesProps> = ({ onLocationSelect, emergencyMode
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-api-key': 'your-secret-key' // This should come from your auth system
+                        'x-api-key': 'change-me' // This should come from your auth system
                     },
                     body: JSON.stringify({
                         lat: location.lat,
@@ -639,5 +639,8 @@ const SafePlaces: React.FC<SafePlacesProps> = ({ onLocationSelect, emergencyMode
 };
 
 export default SafePlaces;
+
+
+
 
 
