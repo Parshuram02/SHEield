@@ -1,7 +1,8 @@
-// Import contacts router
+
 const contactsRouter = require('./routes/contacts');
 // Middleware
 const cors = require('cors');
+
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
