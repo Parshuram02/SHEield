@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 
 const API_URL = "http://localhost:8000/api/contacts";
+const ALERT_API_URL = "http://localhost:8000/api/alert-primary-contact";
 const USER_ID = "USER_ID"; // 🔑 replace with actual logged-in userId
 
 interface Contact {
@@ -37,6 +38,9 @@ const EmergencyContacts: React.FC = () => {
     email: "",
     relationship: "",
   });
+
+  const [alertSending, setAlertSending] = useState(false);
+  const [alertResult, setAlertResult] = useState<string | null>(null);
 
   // Fetch contacts from backend
   const fetchContacts = async () => {
@@ -129,6 +133,45 @@ const EmergencyContacts: React.FC = () => {
       console.error("❌ Error removing primary:", error);
     }
   };
+
+  // Send alert SMS to primary contact with live location
+  const handleSendAlert = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setAlertSending(true);
+    setAlertResult(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+
+        try {
+          const response = await axios.post(ALERT_API_URL, {
+            latitude,
+            longitude,
+          });
+
+          if (response.data.success) {
+            setAlertResult("Alert sent successfully!");
+          } else {
+            setAlertResult("Failed to send alert: " + response.data.error);
+          }
+        } catch (error: any) {
+          setAlertResult("Error sending alert: " + (error.message || error.toString()));
+        } finally {
+          setAlertSending(false);
+        }
+      },
+      (error) => {
+        setAlertSending(false);
+        setAlertResult("Error getting location: " + error.message);
+      }
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -204,6 +247,22 @@ const EmergencyContacts: React.FC = () => {
         </Dialog>
       </div>
 
+      {/* Send Alert Button */}
+      <div className="pt-6">
+        <Button
+          onClick={handleSendAlert}
+          disabled={alertSending}
+          className="bg-red-600 text-white"
+        >
+          {alertSending ? "Sending Alert..." : "Send Safety Alert to Primary Contact"}
+        </Button>
+        {alertResult && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {alertResult}
+          </p>
+        )}
+      </div>
+
       {/* Contacts List */}
       <div className="space-y-3">
         {loading ? (
@@ -274,8 +333,6 @@ const EmergencyContacts: React.FC = () => {
       </div>
     </div>
   );
-
-
 };
 
 export default EmergencyContacts;
